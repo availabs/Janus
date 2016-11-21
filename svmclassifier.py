@@ -12,6 +12,7 @@ def load_names(paths):
         clsnames = map(lambda x: x[x.rfind('/')+1:x.find('_')],
                        fnames)
         clsnames = list(set(clsnames))
+        print(clsnames,paths)
         return clsnames,fnames
 def un_cache(paths):
         for path in paths:

@@ -1,4 +1,4 @@
-from demo import outfacing
+from demo import mainloop
 from svmclassifier import train
 from datacache import feature_cacher
 from tkinter import Tk,Button,Entry,StringVar
@@ -10,12 +10,12 @@ from multiprocessing import Process, Lock, Pipe
 class mygui:
     def __init__(self):
         self.window = Tk()
-        self.demoButton = Button(self.window,text='RunDemo',command=self.democlick )
+        self.demoButton = Button(self.window,text='RunRecognizer',command=self.democlick )
         self.stop = Button(self.window, text="Stop",command=self.stopclick )
-        self.supervise = Button(self.window, text='supervise', command=self.superviseclick )
+        self.supervise = Button(self.window, text='Learn Face', command=self.superviseclick )
         self.input = Entry(self.window)
         self.stop['state'] ='disabled'
-        self.demoButton['state'] = 'disabled'
+        
         #processes
         self.caching = None
         self.training = None
@@ -39,17 +39,22 @@ class mygui:
         self.supervise['state'] = 'disabled'
         self.demoButton['state'] = 'disabled'
         #other stuff
+        self.runningpipe,childpipe = Pipe()
+        self.running = Process(target=mainloop,args=(childpipe,))
+        self.running.start()
         
     def stopclick(self):
         print('stopclick')
         self.stop['state'] = 'disabled'
-        #self.demoButton['state'] = 'normal'
+        self.demoButton['state'] = 'normal'
         self.supervise['state'] = 'normal'
         #other actions...
-        if self.caching is not None and self.caching.exitcode is not None:
+        if self.caching is not None and self.caching.exitcode is None:
             self.cachingpipe.send('STOP')
             self.caching.join()
-        
+        if self.running is not None and self.running.exitcode is None:
+            self.runningpipe.send('STOP')
+            self.running.join()
         
     def superviseclick(self):
         print('superviseclick')
@@ -58,14 +63,13 @@ class mygui:
         self.demoButton['state'] = 'disabled'
         #other actions
         lbl = self.input.get()
-        if lbl is not None and len(lbl) > 0:
-            cacher = feature_cacher()
-        else:
-            cacher = None
+        if lbl is None or len(lbl) == 0:
             self.stopclick()
             return
         self.cachingpipe,childpipe = Pipe()
-        self.caching = Process(target=cacher.cacheprocess, args=(lbl,childpipe))
+        def runner():
+            feature_cacher().cacheprocess(lbl,childpipe)
+        self.caching = Process(target=runner)
         print('code:',self.caching.exitcode)
         self.caching.start()
         
@@ -75,5 +79,3 @@ class mygui:
 if __name__ == '__main__':
     gui = mygui()
     gui.buildgui()
-
-

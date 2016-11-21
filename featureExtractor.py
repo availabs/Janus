@@ -17,7 +17,9 @@ class modelInferance:
                 reps.append(self.net.forward(wf))
             return reps
 
-
+    def kill(self):
+        print('attempting to kill lua server')
+        self.net.__del__()
 
 def main():
     mi = modelInferance()
