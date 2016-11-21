@@ -79,7 +79,7 @@ def train(lock=None,sender=None):
             print (Xtr.shape)
     
         start = time.clock()
-        clf = svm.SVC()
+        clf = svm.SVR()
         clf.fit(Xtr,Ytr)
         print ('Using {} samples,training time: {}'.format(Ytr.shape[0],time.clock()-start))
         preds = clf.predict(Xval)
@@ -97,7 +97,7 @@ def train(lock=None,sender=None):
     return 1
 def write_model(model):
         with open('currbestsvm.pkl','wb') as output:
-                pickle.dump(model,output)
+                pickle.dump(model,output,protocol=2)
 
 def notify(sender):
         if sender is not None:
