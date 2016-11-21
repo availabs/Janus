@@ -15,10 +15,9 @@ class faceprocessor:
 
     def setFinder(self,finder):
         self.finder = finder
-        print(finder)
+
         
     def grabFrame(self):
-        print(self.finder)
         frame,faces = self.finder()
         if faces is not None:
             self.currfaces = faces

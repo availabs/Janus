@@ -54,15 +54,16 @@ class feature_cacher:
                 self.cachePairs(featpairs,label)
 
     def cacheprocess(self,label='1',messenger=None):
-        print('made it')
+        print('made it',label)
         cv2.namedWindow('window')
         key = cv2.waitKey(10)
         if messenger is None:
             print('No process messenger,exiting')
             return
-        print (self.processor.finder)
-        while key < 0 and messenger.poll(0.001) is False:
-            print(key,messenger.poll(0.001))
+        pol = messenger.poll(0.001)
+        while key < 0 and pol is False:
+            print(key,pol)
+            pol = messenger.poll(0.001)
             key = cv2.waitKey(10)
             featpairs = self.genFeaturePairs()
             if featpairs is not None:
