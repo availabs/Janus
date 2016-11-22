@@ -5,6 +5,8 @@ from glob import glob
 import time
 import pickle
 import json
+tol = 0.34
+
 
 def load_names(paths):
         fnames = [name for path in paths for name in glob(os.path.join(path,'*_*.npy'))]
@@ -37,6 +39,7 @@ def train(lock=None,sender=None):
     classes = {}
     clsnames,fnames =try_action(load_names,{'paths':[dirpath,permpath]})
     classmap = {}
+    maxID = 0
     for lbl,cls in enumerate(clsnames):
         classes[cls] = {}
         classes[cls]['feats'] = np.array([np.loadtxt(x)
@@ -45,7 +48,7 @@ def train(lock=None,sender=None):
         print(classes[cls]['len'])
         classes[cls]['lbl'] = lbl*np.ones((classes[cls]['len'],),dtype=np.uint8)
         classmap[cls] = lbl
-    
+        maxID = lbl
     write_classmap(classmap)
 
 
@@ -79,14 +82,19 @@ def train(lock=None,sender=None):
             print (Xtr.shape)
     
         start = time.clock()
-        clf = svm.SVR()
+        
+        clf = svm.SVC(kernel='linear',C=100,probability=True)
         clf.fit(Xtr,Ytr)
         print ('Using {} samples,training time: {}'.format(Ytr.shape[0],time.clock()-start))
         preds = clf.predict(Xval)
+        print(clf.predict_proba(Xval))
+        for i in range(0,maxID+1):
+                preds = np.round(preds)
+                
         acc = np.sum(preds == Yval)/Yval.shape[0]
         accs.append(acc)
         classifiers.append(clf)
-        print ('Accuracy : {}'.format(acc))
+        print ('linear',100,'Accuracy : {}'.format(acc))
 
     best_model_index = np.array(accs).argmax(axis=0)
     print('best accuracy: {}'.format(accs[best_model_index]))
@@ -101,6 +109,6 @@ def write_model(model):
 
 def notify(sender):
         if sender is not None:
-                sender.send(True)
+                sender.send('Done Thinking')
 if __name__ == '__main__':
     train()

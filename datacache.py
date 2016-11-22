@@ -9,23 +9,27 @@ import argparse
 
 
 class feature_cacher:
-    def __init__(self,finder=finder,
+    def __init__(self,finder=None,
                  processor=faceprocessor,
                  extractor=modelInferance,
                  cachePath="/home/avail/data/facerecognition/cache"):
-        
-        self.processor = processor()
-        self.processor.setFinder(finder().nextFaces)
-        self.extractor = extractor()
+        self.finder = finder
+        if self.finder is not None:
+            self.processor = processor()
+            self.processor.setFinder(finder().nextFaces)
+            self.extractor = extractor()
         self.saveDir = cachePath
 
     def genFeaturePairs(self):
+        if self.finder is None:
+            return None
         temp = self.processor.getFaces()
         if temp is None:
             return None
         frame,f,wfaces = temp
         feats = self.extractor.getFeatures(wfaces)
         return zip(feats,wfaces)
+        
             
     def cachePairs(self,pairs,label):
         date = lambda : '_'.join(datetime.today().__str__().split())
@@ -41,6 +45,8 @@ class feature_cacher:
             cv2.imwrite(os.path.join(self.saveDir,filelabel+'.jpg'),wface)
 
     def test(self,label='1'):
+        if self.finder is None:
+            return None
         print('made it')
         cv2.namedWindow('window')
         key = cv2.waitKey(10)
@@ -54,6 +60,8 @@ class feature_cacher:
                 self.cachePairs(featpairs,label)
 
     def cacheprocess(self,label='1',messenger=None):
+        if self.finder is None:
+            return None
         print('made it',label)
         cv2.namedWindow('window')
         key = cv2.waitKey(10)
