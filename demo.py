@@ -80,12 +80,6 @@ def outfacing(lock,receiver,finder=finder):
     label = None
     while cv2.waitKey(10) < 0 and not kill:
         temp = processor.getFaces()
-        if temp is None:
-            continue
-        frame,f,wfaces = temp
-        feats = extractor.getFeatures(wfaces)
-        pair = wfaces[0].shape
-        vizframe = np.zeros((pair[0],pair[1]*len(wfaces),3),dtype=np.uint8)
         if receiver and receiver.poll(0.001):
             signal = receiver.recv()
             print(signal)
@@ -99,6 +93,13 @@ def outfacing(lock,receiver,finder=finder):
             if signal == 'Done Thinking':
                 clf,revmap = load_classifier(lock)
                 print ('HOT SWAPPED CLASSIFIER')
+        if temp is None:
+            continue
+        frame,f,wfaces = temp
+        feats = extractor.getFeatures(wfaces)
+        pair = wfaces[0].shape
+        vizframe = np.zeros((pair[0],pair[1]*len(wfaces),3),dtype=np.uint8)
+        
         clss = clf.predict_proba(feats)
         if cacheFlag:
             pairs = zip(feats,wfaces)

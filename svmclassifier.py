@@ -87,7 +87,6 @@ def train(lock=None,sender=None):
         clf.fit(Xtr,Ytr)
         print ('Using {} samples,training time: {}'.format(Ytr.shape[0],time.clock()-start))
         preds = clf.predict(Xval)
-        print(clf.predict_proba(Xval))
         for i in range(0,maxID+1):
                 preds = np.round(preds)
                 

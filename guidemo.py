@@ -70,6 +70,8 @@ class mygui:
         self.record['state'] = 'normal'
         self.runningpipe.send('STOPCACHE')
         print ('STOPCACHE')
+        print('Attempting to Learn')
+        self.runningpipe.send('LEARN')
             
     def recordclick(self):
         print('recordclick')
