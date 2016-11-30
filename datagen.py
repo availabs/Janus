@@ -20,10 +20,13 @@ class datagenerator:
         self.sorteddata = sorteddata
         self.trfactor = tr2te
         self.currentcls = None
+        self.currentclss= []
         self.classes = None
         self.classix = 0
+        self.mixedindxs={}
         self.sectionedtestingfeats = None
         self.sectionedtestinglbls = None
+        
     def queryfiles(self,paths=None,query=None):
         filenames = []
         types = self.types if query is None else query
@@ -32,7 +35,8 @@ class datagenerator:
         filenames = np.array([fname for pat in patterns for fname in glob(pat)])
         return filenames
 
-
+    
+    
     def loadfeatures(self):
         if self.features is None or self.labels is None:
             fnames = self.queryfiles()
@@ -43,51 +47,69 @@ class datagenerator:
             self.features = np.array([np.loadtxt(fn) for fn in fnames])
             ixs = np.arange(0,len(self.features))
             mx = len(ixs)
-            print (mx)
+
             tr = int(mx*self.trfactor)
-            print(tr)
+
             self.trainingfeats = self.features[ixs[:tr]]
             self.testingfeats  = self.features[ixs[tr:]]
             
             
             self.labels = np.vstack(np.array(list(map(path2classix,fnames))))
             
-            print('labels',self.labels)
+
             self.traininglbls = self.labels[ixs[:tr]]
-            print(self.traininglbls)
+
             self.testinglbls  = self.labels[ixs[tr:]]
 
     def load_sectioned_features(self):
         if self.features is None or self.labels is None:
+            #get filenames of the current files
             fnames = self.queryfiles()
+            #get the classmap for those objects
             clsmap = json.loads(open('classmap.json').read())
+            #get numerical ids for them
             numkeys = len(list(clsmap.keys()))
+            #define a mapper from classes to keys
             mapper = lbl_vec(clsmap,numkeys)
         if self.features is None:
+            #load the features
             self.features = np.array([np.loadtxt(fn) for fn in fnames])
+            #load the labels
             self.labels =   np.vstack(np.array(list(map(mapper,fnames))))
+            #get classes from the filenames
             clss = self.get_classes(fnames,clsmap)
+            #get their id
             clsnums = list(set(clss))
+            #initialize storage
             self.trainingfeats = {}
             self.traininglbls = {}
             self.testingfeats = {}
             self.testinglbls = {}
-            for id in clsnums:
-                ixs = clss == id
+            # for each class
+            for idx in clsnums:
+                #add zero index to multiclass indexmap
+                self.mixedindxs[idx] = 0
+                #define numpy mask for the features of the desired class
+                ixs = clss == idx
+                #group them together
                 feats = self.features[ixs]
+                #as well as their labels
                 lbls   = self.labels[ixs]
                 numf = len(feats)
+                #define a pivot between training and validation data
                 pivot = int(numf*self.trfactor)
-                self.trainingfeats[id] = feats[:pivot]
-                self.traininglbls[id]  = lbls[:pivot]
-                self.testingfeats[id] = feats[pivot:]
-                self.testinglbls[id]  = lbls[pivot:]
+                #move the training and testing data to their class storage
+                self.trainingfeats[idx] = feats[:pivot]
+                self.traininglbls[idx]  = lbls[:pivot]
+                self.testingfeats[idx] = feats[pivot:]
+                self.testinglbls[idx]  = lbls[pivot:]
             self.classes = clsnums
     def get_classes(self,fnames,clsmap):
         return np.array(
             list(map(lambda x:clsmap[x[x.rfind('/')+1:x.find('_')]],
                      fnames)))
-    
+    #This method is for loading data and putting it in non random order
+    #sorted/grouped by the class type of the feature
     def load_sorted_features(self):
         if self.features is None or self.labels is None:
             fnames = self.queryfiles()
@@ -112,7 +134,7 @@ class datagenerator:
                                 for feats,mx in zip(srtdfeats,lengths)])
             self.testinglbls  = np.vstack([lbls[mx:]
                                 for lbls,mx in zip(srtdlabels,lengths)])
-            print(self.traininglbls,self.testinglbls)
+
             
     def next_train_batch(self,bsize=100):
         if not self.sorteddata:
@@ -124,13 +146,14 @@ class datagenerator:
         idx = np.mod(idx,maxi)
         self.trindex = (self.trindex + bsize) % maxi
         return self.trainingfeats[idx],self.traininglbls[idx]
-
+ 
     def updateclass(self):
         #if the current index is in range
         if self.classix < len(self.classes):
             #get the classid in that position
             self.currentcls = self.classes[self.classix]
             id = self.currentcls
+            self.currentclss.append(id)
             #if at the beginning set section to the first one
             if self.classix == 0:
                 self.sectionedtestingfeats = self.testingfeats[id]
@@ -144,7 +167,12 @@ class datagenerator:
                     self.sectionedtestinglbls,self.testinglbls[id]])
             #increment the class index for the next jump
             self.classix += 1
-    
+
+                
+    #loads the next batch from the current class unless
+    #the nextcls flag is passed, in which case it will
+    #load samples from the next class, not loading any data from
+    #previous classes
     def next_sectioned_train_batch(self,bsize=100,nextcls=False):
         self.load_sectioned_features()
         if self.currentcls is None:
@@ -159,6 +187,36 @@ class datagenerator:
         self.trindex = (self.trindex+bsize) % maxi
         return self.trainingfeats[id][idx],self.traininglbls[id][idx]
     
+    #use this method to simulate new class introduction
+    #that is intermingled with previous data instead of
+    #looked at in a solitary fashion
+    def next_time_mixed_train_batch(self,bsize=100,nextcls=False):
+        self.load_sectioned_features()
+        if self.currentcls is None:
+            self.updateclass()
+        if nextcls:
+            self.updateclass()
+        clscountsarr = []
+        clscounts = {}
+        chunks = chunker(bsize,len(self.currentclss))
+        for cls in self.currentclss:
+            maxi = len(self.trainingfeats[cls])
+            clscountsarr.append(maxi)
+            clscounts[cls] = maxi
+        
+        trainingfeats = None
+        traininglbls = None
+        for chunksize,cls in zip(chunks,self.currentclss):
+            
+            maxi = clscounts[cls]
+            idx = np.mod(np.arange(self.mixedindxs[cls],self.mixedindxs[cls]+chunksize),maxi)
+            self.mixedindxs[cls]  = self.mixedindxs[cls] + chunksize % maxi
+            trainingfeats = self.trainingfeats[cls][idx] if trainingfeats is None else np.vstack([trainingfeats,self.trainingfeats[cls][idx]])
+            traininglbls  = self.traininglbls[cls][idx] if traininglbls is None else  np.vstack( [traininglbls ,self.traininglbls[cls][idx]])
+
+        return trainingfeats,traininglbls
+
+
     def next_test_batch(self,bsize=100):
         if not self.sorteddata:
             self.loadfeatures()
@@ -170,6 +228,11 @@ class datagenerator:
         self.teindex = (self.teindex + bsize) % maxi
         return self.testingfeats[idx],self.testinglbls[idx]
 
+# based on http://stackoverflow.com/questions/2659900/python-slicing-a-list-into-n-nearly-equal-length-partitions
+def chunker(num,numparts):
+    factor = num/numparts
+    return [ int(round(factor*(x+1)) - round(factor * x)) for x in range(numparts)]
+    
 
 def lbl_vec(nmmap,length):
 
@@ -183,5 +246,8 @@ def lbl_vec(nmmap,length):
     
 if __name__ == '__main__':
     datagen = datagenerator(sorteddata=True)
-    datagen.load_sorted_features()
+    for i in range(1,1000):
+        data = datagen.next_time_mixed_train_batch(100,i % 100 == 0)
+
+
         

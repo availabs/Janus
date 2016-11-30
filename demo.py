@@ -1,6 +1,7 @@
 import pickle
 import json
 from facedetection.detection import myfacefinder as finder
+from facedetection.tracking import multitracker as tracker
 from acquire import faceprocessor
 from featureExtractor import modelInferance
 from datacache import feature_cacher
@@ -26,7 +27,8 @@ def mainloop(pipe=None):
         if p2_conn.poll(0.0001):
             signal = p2_conn.recv()
             if signal == 'Done Thinking':
-                pipe.send(signal)
+                if pipe is not None:
+                    pipe.send(signal)
             
             p1_conn.send(signal)
         
@@ -72,12 +74,15 @@ def outfacing(lock,receiver,finder=finder):
     cv2.namedWindow('visuals')
     processor = faceprocessor()
     extractor = modelInferance()
+    processor.setSource(cv2.VideoCapture(0))
     processor.setFinder(finder().nextFaces)
+    #processor.setTracker(tracker())
     clf,revmap = load_classifier(lock)
     cacher = feature_cacher()
     kill = False
     cacheFlag = False
     label = None
+    cv2.namedWindow('visual')
     while cv2.waitKey(10) < 0 and not kill:
         temp = processor.getFaces()
         if receiver and receiver.poll(0.001):
@@ -95,11 +100,11 @@ def outfacing(lock,receiver,finder=finder):
                 print ('HOT SWAPPED CLASSIFIER')
         if temp is None:
             continue
-        frame,f,wfaces = temp
+        frame,fbbs,wfaces = temp
         feats = extractor.getFeatures(wfaces)
         pair = wfaces[0].shape
         vizframe = np.zeros((pair[0],pair[1]*len(wfaces),3),dtype=np.uint8)
-        
+        cv2.imshow('visual',frame)
         clss = clf.predict_proba(feats)
         if cacheFlag:
             pairs = zip(feats,wfaces)

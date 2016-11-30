@@ -10,19 +10,19 @@ AlignDlib = AD('/home/avail/code/torch-projs/openface/models/dlib/shape_predicto
 
 class myfacefinder:
     
-    def __init__(self,filedev=0,scale=0.75,verb=False):
-        self.vid = cv2.VideoCapture(filedev)
+    def __init__(self,scale=0.75,verb=False):
         self.face_finder = self.build_facefinder()
-        self.scale = 0.75
+        self.scale = scale
         self.verb = verb
     def build_facefinder(self):
         return AlignDlib.getAllFaceBoundingBoxes
 
-    def nextFaces(self):
-        st,frame = self.vid.read()
-        if not st:
-            return None
-        f = cv2.resize(cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),(0,0),
+    def nextFaces(self,inframe=None):
+        if inframe is None:
+            return (inframe,None)
+        frame = inframe
+        rgb = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+        f = cv2.resize(rgb,(0,0),
                        fx=self.scale,fy=self.scale)
         dfaces = self.face_finder(f)
         patches = []
@@ -36,8 +36,7 @@ class myfacefinder:
             truefaces.append(dlib.rectangle(left=x1,top=y1,right=x2,bottom=y2))
             if self.verb:
                 patches.append(frame[y1:y2,x1:x2])
-        cv2.imshow('visual',frame)
-        return cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),truefaces
+        return rgb,truefaces
 
 def main():
     import pdb
