@@ -2,13 +2,13 @@ import tensorflow as tf
 from datagen import datagenerator
 
 class model:
-    def __init__(self):
+    def __init__(self,inputshape=128,outputshape=5):
         
-        X = tf.placeholder(tf.float32, shape=[None, 128])
-        Y_ = tf.placeholder(tf.float32, shape=[None,5])
+        X = tf.placeholder(tf.float32, shape=[None, inputshape])
+        Y_ = tf.placeholder(tf.float32, shape=[None,outputshape])
 
-        W = tf.Variable(tf.zeros([128,5]))
-        b = tf.Variable(tf.zeros([5]))
+        W = tf.Variable(tf.zeros([inputshape,outputshape]))
+        b = tf.Variable(tf.zeros([outputshape]))
 
         Y = tf.matmul(X,W)+b
         prediction = tf.argmax(tf.nn.softmax(Y),1)
@@ -31,32 +31,55 @@ class model:
         self.X = X
         self.Y = Y
         self.Y_ = Y_
+        self.currdata=None
+        self.currlbls=None
+
+    def input_traindata(self,data,lbls):
+        self.curr_trdata = data
+        self.curr_trlbls = lbls
+
+    def input_data(self,data,lbls=None):
+        self.testdata = data
+        self.testlbls = lbls
+        
+    def backprop(self):
+        data = {self.X:self.curr_trdata,self.Y_:self.curr_trlbls}
+        train = self.train
+        self.session.run(train,feed_dict=data)
+
+    def curraccuracy(self):
+        testdata = {self.X:self.testdata,self.Y_:self.testlbls}
+        return self.session.run(self.accuracy,feed_dict=testdata)
+
+    
+        
+    def pred(self):
+        pred = self.prediction
+        data = {self.X:self.testdata }
+        return self.session.run(pred,feed_dict=data)
+        
     def test(self):
         generator = datagenerator(sorteddata=True)
         lasty = -1
-        testingfeats = generator.sectionedtestingfeats
-        testinglbls = generator.sectionedtestinglbls
         for y in range(20):
-            for x in range(1000):
+            for x in range(100):
                 newclass = lasty != y
                 if newclass:
                     lasty = y
-                bx,by = generator.next_time_mixed_train_batch(10,
+                bx,by = generator.next_time_mixed_train_batch(100,
                                                               nextcls=newclass)
-        
-            self.session.run(self.train,feed_dict={self.X:bx,self.Y_:by})
+                self.input_traindata(bx,by)
+                self.backprop()
             testingfeats = generator.sectionedtestingfeats
             testinglbls = generator.sectionedtestinglbls
-            acc = self.session.run(self.accuracy,feed_dict=
-                   {self.X:testingfeats,
-                    self.Y_:testinglbls})
-
+            self.input_data(testingfeats,testinglbls)
+            acc = self.curraccuracy()
     
             print(testinglbls.shape)
             print( y, acc )
-        print (self.session.run(self.prediction,
-                                feed_dict={self.X:testingfeats,
-                                           self.Y_:testinglbls}))
+        print (self.pred())
+
+
         
 if __name__ == '__main__':
     nn = model()
