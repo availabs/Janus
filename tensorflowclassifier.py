@@ -68,10 +68,11 @@ class model:
                     lasty = y
                 bx,by = generator.next_time_mixed_train_batch(100,
                                                               nextcls=newclass)
+
                 self.input_traindata(bx,by)
                 self.backprop()
             testingfeats = generator.sectionedtestingfeats
-            testinglbls = generator.sectionedtestinglbls
+            testinglbls = generator.get_sectioned_testing_lbls()
             self.input_data(testingfeats,testinglbls)
             acc = self.curraccuracy()
     

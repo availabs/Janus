@@ -3,6 +3,9 @@ from glob import glob
 import numpy as np
 import json
 
+
+
+
 class datagenerator:
     def __init__(self,paths=['/home/avail/data/facerecognition/cache'
                              ,'/home/avail/data/facerecognition/persistance'],
@@ -23,9 +26,11 @@ class datagenerator:
         self.currentclss= []
         self.classes = None
         self.classix = 0
+        self.classmap = None
         self.mixedindxs={}
         self.sectionedtestingfeats = None
         self.sectionedtestinglbls = None
+        self.livestream = datagenstream()
         
     def queryfiles(self,paths=None,query=None):
         filenames = []
@@ -42,7 +47,7 @@ class datagenerator:
             fnames = self.queryfiles()
             clsmap = json.loads(open('classmap.json').read())
             numkeys = len(list(clsmap.keys()))
-            path2classix = lbl_vec(clsmap,numkeys)
+            path2classix = mapper_lbl_vec(clsmap,numkeys)
         if self.features is None:
             self.features = np.array([np.loadtxt(fn) for fn in fnames])
             ixs = np.arange(0,len(self.features))
@@ -67,10 +72,11 @@ class datagenerator:
             fnames = self.queryfiles()
             #get the classmap for those objects
             clsmap = json.loads(open('classmap.json').read())
+            self.classmap = clsmap
             #get numerical ids for them
             numkeys = len(list(clsmap.keys()))
             #define a mapper from classes to keys
-            mapper = lbl_vec(clsmap,numkeys)
+            mapper = mapper_name
         if self.features is None:
             #load the features
             self.features = np.array([np.loadtxt(fn) for fn in fnames])
@@ -104,10 +110,37 @@ class datagenerator:
                 self.testingfeats[idx] = feats[pivot:]
                 self.testinglbls[idx]  = lbls[pivot:]
             self.classes = clsnums
+
     def get_classes(self,fnames,clsmap):
         return np.array(
             list(map(lambda x:clsmap[x[x.rfind('/')+1:x.find('_')]],
                      fnames)))
+
+    #This function will handle the case of newly inputted data from 
+    def livefeed(self,newfeats,labels=None):
+        self.load_sectioned_features()
+        if labels is not None:
+            lbls = set(labels)
+            exisitinglbls = set(self.classmap.keys())
+            newlbls = lbls.difference(exisitinglbls)
+            maxkey = max(self.classmap.values())
+            for lbl in newlbls:
+                maxkey += 1
+                self.classmap[lbl] = maxkey
+                
+            
+            oldf,oldl = self.next_sectioned_train_batch(bsize=50)
+            self.livestream.input(newfeats,labels)
+            newf,newl = self.livestream.grab_stream_batch(maxkey,batchsize=50)
+            newlbls = np.array(list(map(lambda x:name2lbl_vec(
+                self.classmap,x,len(self.classmap.keys())),newl)))
+            print(oldf.shape,newf.shape,oldl.shape,newlbls.shape)
+            return np.concatenate((oldf,newf)),np.concatenate((oldl,newlbls))
+
+        
+        
+        
+    
     #This method is for loading data and putting it in non random order
     #sorted/grouped by the class type of the feature
     def load_sorted_features(self):
@@ -115,7 +148,7 @@ class datagenerator:
             fnames = self.queryfiles()
             clsmap = json.loads(open('classmap.json').read())
             numkeys = len(list(clsmap.keys()))
-            mapper = lbl_vec(clsmap,numkeys)
+            mapper = mapper_lbl_vec(clsmap,numkeys)
         if self.features is None:
             self.features = np.array([np.loadtxt(fn) for fn in fnames])
             self.labels =   np.vstack(np.array(list(map(mapper,fnames))))
@@ -185,7 +218,10 @@ class datagenerator:
         idx = np.arange(self.trindex,self.trindex+bsize)
         idx = np.mod(idx,maxi)
         self.trindex = (self.trindex+bsize) % maxi
-        return self.trainingfeats[id][idx],self.traininglbls[id][idx]
+        lbls = np.array(list(map(lambda x:name2lbl_vec(
+            self.classmap,x,len(self.classmap.keys())),np.hstack(self.traininglbls[id][idx]))))
+
+        return self.trainingfeats[id][idx],lbls
     
     #use this method to simulate new class introduction
     #that is intermingled with previous data instead of
@@ -214,7 +250,10 @@ class datagenerator:
             trainingfeats = self.trainingfeats[cls][idx] if trainingfeats is None else np.vstack([trainingfeats,self.trainingfeats[cls][idx]])
             traininglbls  = self.traininglbls[cls][idx] if traininglbls is None else  np.vstack( [traininglbls ,self.traininglbls[cls][idx]])
 
-        return trainingfeats,traininglbls
+        lbls = np.array(list(map(lambda x:name2lbl_vec(
+            self.classmap,x,len(self.classmap.keys())),np.hstack(traininglbls))))
+
+        return trainingfeats,lbls
 
 
     def next_test_batch(self,bsize=100):
@@ -228,26 +267,94 @@ class datagenerator:
         self.teindex = (self.teindex + bsize) % maxi
         return self.testingfeats[idx],self.testinglbls[idx]
 
+
+    def get_sectioned_testing_lbls(self):
+        lbls = np.array(list(map(lambda x:name2lbl_vec(
+            self.classmap,x,len(self.classmap.keys())),np.hstack(self.sectionedtestinglbls))))
+
+        return lbls
+#This will be for the handling of a class of streamed data instead of cached data
+class datagenstream:
+    def __init__(self):
+        self.features = {}
+        self.labels = set([])
+        self.mixedindxs={}
+
+    def input(self,features,labels=None):
+        if labels is not None:
+            for lbl in set(list(labels)):
+                self.features[lbl] = features[labels==np.array([lbl])]
+                print(labels==lbl)
+                print(self.features[lbl])
+                self.labels = self.labels.union([lbl])
+                if lbl not in self.mixedindxs:
+                    self.mixedindxs[lbl] = 0
+        else:
+            print('What Am I Looking at?')    
+                
+    def grab_stream_batch(self,labelsize,batchsize=100):
+        chunks = chunker(batchsize,len(list(self.labels)))
+        feats = None
+        lbls = None
+        for chunksize,label in zip(chunks,list(self.labels)):
+            maxi = len(self.features[label])
+            idx = np.mod(np.arange(self.mixedindxs[label],self.mixedindxs[label]+chunksize),maxi)
+            self.mixedindxs[label] = (self.mixedindxs[label]+chunksize) %maxi
+            newfeats = self.features[label][idx]
+            print(labelsize)
+            newlbls  = np.array(list(map(lambda x: label,newfeats)))
+            print(newfeats.shape,newlbls.shape)
+            if feats is not None and lbls is not None:
+                feats = np.vstack([feats,newfeats])
+                lbls = np.vstack([lbls,newlbls])
+            else:
+                feats = newfeats
+                lbls = newlbls
+        return feats,lbls
+
+    
+
+            
 # based on http://stackoverflow.com/questions/2659900/python-slicing-a-list-into-n-nearly-equal-length-partitions
 def chunker(num,numparts):
     factor = num/numparts
     return [ int(round(factor*(x+1)) - round(factor * x)) for x in range(numparts)]
-    
 
-def lbl_vec(nmmap,length):
+def mapper_name(fname):
+    return fname[fname.rfind('/')+1:fname.find('_')]
+
+def name2lbl_vec(nmmap,name,length):
+    return lbl_vec(nmmap[name],length)
+            
+def mapper_lbl_vec(nmmap,length):
 
     def fun(name):
         name = name[name.rfind('/')+1:name.find('_')]
         cls = nmmap[name]
-        lvec = np.zeros((1,length),dtype=np.uint8)
-        lvec[0,cls] = 1
+        lvec = lbl_vec(cls,length)
         return lvec
     return fun
-    
+
+def lbl_vec(ix,length):
+    lvec = np.zeros((length,),dtype=np.uint8)
+    lvec[ix] = 1
+    return lvec
+
 if __name__ == '__main__':
     datagen = datagenerator(sorteddata=True)
-    for i in range(1,1000):
-        data = datagen.next_time_mixed_train_batch(100,i % 100 == 0)
-
-
+    # for i in range(1,1000):
+    #     data = datagen.next_time_mixed_train_batch(100,i % 100 == 0)
+    #     print (data[0].shape,data[1].shape)
+    feats = np.random.sample((1000,128))
+    lbls = list(np.repeat(np.array('test'),1000))
+    datagen.livefeed(feats,labels=lbls)
+        
+    # datagen = datagenstream()
+    # feats = np.random.sample((1000,1))
+    # lbls = np.random.randint(3,size=(1000,))
+    # datagen.input(feats,labels=lbls)
+    # for i in range(0,10):
+    #     data,lbls = datagen.grab_stream_batch(labelsize=3)
+    #     print (len(data),len(lbls))
+        
         

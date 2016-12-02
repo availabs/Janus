@@ -106,12 +106,12 @@ def outfacing(lock,receiver,finder=finder):
         frame,fbbs,wfaces = temp
         feats = extractor.getFeatures(wfaces)
         
-        handledata(cacheFlag,lbl)
+        clss = handledata(dnn,generator,cacher,cacheFlag,label,feats,wfaces)
         
         pair = wfaces[0].shape
         vizframe = np.zeros((pair[0],pair[1]*len(wfaces),3),dtype=np.uint8)
         cv2.imshow('visual',frame)
-        clss = clf.predict_proba(feats)
+        #clss = clf.predict_proba(feats)
         i = 0
         for face,probs in zip(wfaces,clss):
             #retrieve the top 2 classes based on probabilty
@@ -126,21 +126,22 @@ def outfacing(lock,receiver,finder=finder):
     extractor.kill()
     return 1
 
-def handledata(cacheflag,label,feats,wfaces):
+def handledata(dnn,cacher,generator,cacheFlag,label,feats,wfaces):
+    print(dnn,cacher,cacheFlag,label)
     preds = None
     if cacheFlag:
         pairs = zip(feats,wfaces)
         cacher.cachePairs(pairs,label)
-        formfeats = generator.livefeed(feats)
-        dnn.input_traindata(formfeats['data'],formfeats['lbls'])
+        dnn.input_traindata(feats,)
         dnn.backprop()
         dnn.input_data(feats)
         preds = dnn.pred()
     else:
         dnn.input_data(feats)
         preds = dnn.pred()
-    print preds
-    
-        
+    print(preds)
+    return preds
+
+
 if __name__ == '__main__':
     mainloop()
