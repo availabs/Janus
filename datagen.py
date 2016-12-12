@@ -132,10 +132,10 @@ class datagenerator:
             oldf,oldl = self.next_sectioned_train_batch(bsize=50)
             self.livestream.input(newfeats,labels)
             newf,newl = self.livestream.grab_stream_batch(maxkey,batchsize=50)
+            print(self.classmap)
             newlbls = np.array(list(map(lambda x:name2lbl_vec(
                 self.classmap,x,len(self.classmap.keys())),newl)))
-            print(oldf.shape,newf.shape,oldl.shape,newlbls.shape)
-            return np.concatenate((oldf,newf)),np.concatenate((oldl,newlbls))
+            return np.concatenate((oldf,newf)),np.concatenate((oldl,newlbls)),self.classmap
 
         
         
@@ -145,13 +145,15 @@ class datagenerator:
     #sorted/grouped by the class type of the feature
     def load_sorted_features(self):
         if self.features is None or self.labels is None:
-            fnames = self.queryfiles()
+            fnames = sorted(self.queryfiles())
             clsmap = json.loads(open('classmap.json').read())
             numkeys = len(list(clsmap.keys()))
             mapper = mapper_lbl_vec(clsmap,numkeys)
         if self.features is None:
             self.features = np.array([np.loadtxt(fn) for fn in fnames])
             self.labels =   np.vstack(np.array(list(map(mapper,fnames))))
+            from IPython import embed
+            embed()
             clss = self.get_classes(fnames,clsmap)
             clsnums = list(set(clss))
             srtdfeats = [self.features[clss==cIx] for  cIx in clsnums]
@@ -206,7 +208,7 @@ class datagenerator:
     #the nextcls flag is passed, in which case it will
     #load samples from the next class, not loading any data from
     #previous classes
-    def next_sectioned_train_batch(self,bsize=100,nextcls=False):
+    def next_sectioned_train_batch(self,bsize=100,nextcls=False,nclasses=None):
         self.load_sectioned_features()
         if self.currentcls is None:
             self.updateclass()
@@ -218,15 +220,26 @@ class datagenerator:
         idx = np.arange(self.trindex,self.trindex+bsize)
         idx = np.mod(idx,maxi)
         self.trindex = (self.trindex+bsize) % maxi
+        outlen = len(self.classmap.keys()) if nclasses is None else nclasses
         lbls = np.array(list(map(lambda x:name2lbl_vec(
-            self.classmap,x,len(self.classmap.keys())),np.hstack(self.traininglbls[id][idx]))))
+            self.classmap,x,outlen),np.hstack(self.traininglbls[id][idx]))))
 
         return self.trainingfeats[id][idx],lbls
-    
+
+    #This method is used for the case of training a classifier
+    #with a subset of the classes and adding a new class after setting a flag
+    #for the purpose of detecting a new class
+    def next_novelty_train_batch(self,bsize=100,newclass=False):
+        self.load_sectioned_features()
+        if newclass:
+            self.updateclass()
+        
+            
+        
     #use this method to simulate new class introduction
     #that is intermingled with previous data instead of
     #looked at in a solitary fashion
-    def next_time_mixed_train_batch(self,bsize=100,nextcls=False):
+    def next_time_mixed_train_batch(self,bsize=100,nextcls=False,nclasses=None):
         self.load_sectioned_features()
         if self.currentcls is None:
             self.updateclass()
@@ -250,8 +263,9 @@ class datagenerator:
             trainingfeats = self.trainingfeats[cls][idx] if trainingfeats is None else np.vstack([trainingfeats,self.trainingfeats[cls][idx]])
             traininglbls  = self.traininglbls[cls][idx] if traininglbls is None else  np.vstack( [traininglbls ,self.traininglbls[cls][idx]])
 
+        outlen = len(self.classmap.keys()) if nclasses is None else nclasses
         lbls = np.array(list(map(lambda x:name2lbl_vec(
-            self.classmap,x,len(self.classmap.keys())),np.hstack(traininglbls))))
+            self.classmap,x,outlen),np.hstack(traininglbls))))
 
         return trainingfeats,lbls
 
@@ -268,9 +282,10 @@ class datagenerator:
         return self.testingfeats[idx],self.testinglbls[idx]
 
 
-    def get_sectioned_testing_lbls(self):
+    def get_sectioned_testing_lbls(self,nclasses=None):
+        outlen = len(self.classmap.keys()) if nclasses is None else nclasses
         lbls = np.array(list(map(lambda x:name2lbl_vec(
-            self.classmap,x,len(self.classmap.keys())),np.hstack(self.sectionedtestinglbls))))
+            self.classmap,x,outlen),np.hstack(self.sectionedtestinglbls))))
 
         return lbls
 #This will be for the handling of a class of streamed data instead of cached data
@@ -284,8 +299,6 @@ class datagenstream:
         if labels is not None:
             for lbl in set(list(labels)):
                 self.features[lbl] = features[labels==np.array([lbl])]
-                print(labels==lbl)
-                print(self.features[lbl])
                 self.labels = self.labels.union([lbl])
                 if lbl not in self.mixedindxs:
                     self.mixedindxs[lbl] = 0
@@ -303,7 +316,6 @@ class datagenstream:
             newfeats = self.features[label][idx]
             print(labelsize)
             newlbls  = np.array(list(map(lambda x: label,newfeats)))
-            print(newfeats.shape,newlbls.shape)
             if feats is not None and lbls is not None:
                 feats = np.vstack([feats,newfeats])
                 lbls = np.vstack([lbls,newlbls])
@@ -345,9 +357,10 @@ if __name__ == '__main__':
     # for i in range(1,1000):
     #     data = datagen.next_time_mixed_train_batch(100,i % 100 == 0)
     #     print (data[0].shape,data[1].shape)
-    feats = np.random.sample((1000,128))
-    lbls = list(np.repeat(np.array('test'),1000))
-    datagen.livefeed(feats,labels=lbls)
+
+    # feats = np.random.sample((1000,128))
+    # lbls = list(np.repeat(np.array('test'),1000))
+    # datagen.livefeed(feats,labels=lbls)
         
     # datagen = datagenstream()
     # feats = np.random.sample((1000,1))
@@ -357,4 +370,4 @@ if __name__ == '__main__':
     #     data,lbls = datagen.grab_stream_batch(labelsize=3)
     #     print (len(data),len(lbls))
         
-        
+    datagen.load_sorted_features()    
