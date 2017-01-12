@@ -2,9 +2,23 @@ import os
 from glob import glob
 import numpy as np
 import json
+import datetime
+import pandas
+def loadPandaFrame ( path ) :
+    files = glob(os.path.join( path, '*_*' ) )
+    trimer = lambda x : x.split('/')[-1]
+    name = lambda x : x[:x.find('_')]
+    date = lambda x : datetime.datetime(*tuple(map(int,x[x.find('_')+1:x.find('.npy')].replace('_','-').replace(':','-').replace('.','-').split('-'))))
+    data = lambda x : np.loadtxt(x)
+    loaded_data = map( lambda x : {'name':name(trimer(x)),
+                                   'date':date(trimer(x)),
+                                   'file':x},files)
+    
+    
+    sorted(loaded_data,lambda (x,y): x.date - y.date)
 
-
-
+            
+    return df
 
 class datagenerator:
     def __init__(self,paths=['/home/avail/data/facerecognition/cache'

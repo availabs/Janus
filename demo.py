@@ -1,3 +1,4 @@
+import __init__
 import pickle
 import json
 from facedetection.detection import myfacefinder as finder

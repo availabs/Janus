@@ -36,9 +36,11 @@ class model:
 
     def save(self):
         saver = tf.train.Saver()
-        save_path = saver.save(self.session,'./checkpoints/tflowmodel.ckpt')
+        save_path = saver.save(self.session,
+            '/home/avail/code/facerecognition/checkpoints/tflowmodel.ckpt')
         print("Model saved in file %s" % save_path)
-    def load_previous(self,path='./checkpoints/tflowmodel.ckpt'):
+    def load_previous(self,
+        path='/home/avail/code/facerecognition/checkpoints/tflowmodel.ckpt'):
         loader = tf.train.Saver()
         loader.restore(self.session,path)
         print('Model Restored')
@@ -152,7 +154,9 @@ def chunker(num,numparts):
     factor = num/numparts
     return [ int(round(factor*(x+1)) - round(factor * x)) for x in range(numparts)]
 
-        
+
+
+
 if __name__ == '__main__':
     nn = model()
     nn.test()

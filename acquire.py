@@ -29,6 +29,16 @@ class faceprocessor:
             return frame
         else:
             return None
+    def get_cb_faces(self,img,bboxes):
+        bgrframe = img
+        faces = bboxes
+        rgbframe = cv2.cvtColor(bgrframe,cv2.COLOR_BGR2RGB)
+        resfaces = [ad.align(imgDim=self.facedim,
+                              rgbImg=rgbframe,bb=f) for f in faces]
+        if len(bboxes) == 0:
+            return None
+        return rgbframe,faces,resfaces
+
     def getFaces(self):
         bgrframe = self.grabFrame()
         if self.tracker is not None:
@@ -58,6 +68,9 @@ class faceprocessor:
                                      rgbImg=rgbframe,bb=face))
         return rgbframe,faces,resfaces
 
+
+        
+    
 if __name__ == '__main__':
     print('unimplemented')
     

@@ -15,7 +15,7 @@ import time
 from tensorflowclassifier import model
 from datagen import datagenerator
 from IPython import embed
-from windowmaintainer import window
+from windowmaintainer import IdWindows
 from tts import mptts
 import queue
 
@@ -73,7 +73,7 @@ def outfacing(lock,receiver,ttsque=None,finder=finder):
     processor.setSource(cv2.VideoCapture(0))
     processor.setFinder(finder().nextFaces)
     faceDict = FaceDictionary()
-    datawindow = window()
+    datawindow = IdWindows()
     dnn = model()
     dnn.load_previous()
     generator = datagenerator()
@@ -103,24 +103,31 @@ def outfacing(lock,receiver,ttsque=None,finder=finder):
             continue
         frame,fbbs,wfaces = temp
         feats = extractor.getFeatures(wfaces)
-        #faceDict.update(fbbs,feats)
-        #index,fbbs,feats = faceDict.getobjs()
-        index = np.ones(len(fbbs))
+        faceDict.update(fbbs,feats)
+        index,fbbs,feats = faceDict.getobjs()
+
+        
+        
         clss,score,tmap = handledata(dnn,cacher,generator,cacheFlag,label,
-                                       feats,wfaces,datawindow)
+                                       feats,wfaces,datawindow,index)
         if tmap is not None:
             revmap = tmap
-        if score is not None:
-            isUnknown = score < 8.0
-        else:
-            isUnknown = False
+        isUnknown = {k:v for k,v in zip(index,np.zeros((1,len(index)),dtype=bool))}
+        if len(isUnknown.keys()) == 0:
+            isUnknown = [False]
+        for id in index:
+            if id in score:
+                isUnknown[id] = score[id] < 8.0
+            else:
+                isUnknown[id] = False
 
         sendmesg(isUnknown,'What are you doing here? Relinquish thine name. ',ttsque)
 
         ix += 1
+
         
         visualize(frame,fbbs,wfaces,clss,revmap,isUnknown,index)
-        # print(clss)
+
     extractor.kill()
     return 1
 
@@ -138,7 +145,9 @@ def visualize(frame,fbbs,wfaces,clss,revmap,unknown,index):
 
     #clss = clf.predict_proba(feats)
     i = 0
-    for face,bbx,probs,ix in zip(wfaces,fbbs,clss,index):
+
+    for face,bbx,probs,inx in zip(wfaces,fbbs,clss,index):
+
         #retrieve the top 2 classes based on probabilty
         top2 = probs.argsort()[-2:] 
         for ix,cls in enumerate(top2):
@@ -151,22 +160,26 @@ def visualize(frame,fbbs,wfaces,clss,revmap,unknown,index):
         textcorner = (bbx.left(),bbx.top()-15)
         idcorner   = (bbx.right()-10,bbx.top())
         botcorner = (bbx.right(),bbx.bottom())
-        cv2.rectangle(frame,topcorner,botcorner,(0,255,0))
+        if(unknown[inx]):
+            cv2.rectangle(frame,topcorner,botcorner,(0,255,255))
+            cv2.putText(frame,'Unknown',(topcorner[0],botcorner[1]+3),
+                        cv2.FONT_HERSHEY_COMPLEX,0.6,(0,255,255))
+        else:
+            cv2.rectangle(frame,topcorner,botcorner,(0,255,0))
         cv2.putText(frame,revmap[round(top2[1])]+':{0:.3f}'.format(probs[top2[1]]),
                     textcorner,cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0))
-        cv2.putText(frame,'id:{}'.format(ix),idcorner,
+        cv2.putText(frame,'id:{}'.format(inx),idcorner,
                     cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0))
 
-        if(unknown):
-            cv2.putText(frame,'Unknown Exists',(25,425),
-                        cv2.FONT_HERSHEY_COMPLEX,1,(0,255,255))
+
+   
     cv2.imshow('visual',frame)
     cv2.imshow('visuals',vizframe)
 
 
-def handledata(dnn,cacher,generator,cacheFlag,label,feats,wfaces,datawindow):
+def handledata(dnn,cacher,generator,cacheFlag,label,feats,wfaces,datawindow,index):
     preds = None
-    score  = None
+    score  = {}
     revmap = None
     if cacheFlag:
         pairs = zip(feats,wfaces)
@@ -183,13 +196,13 @@ def handledata(dnn,cacher,generator,cacheFlag,label,feats,wfaces,datawindow):
     else:
         dnn.input_data(np.vstack(feats))
         preds = dnn.pred()
-        #this is assuming ONLY ONE person at a time 
-        datawindow.push(preds[0])
-        if datawindow.isfull():
-            ps = datawindow.getobjs()
-            ps = np.vstack(list(ps))
-            scores = dnn.non_class_window_score(ps,datawindow.ws)
-            score = scores.mean()
+        for id,pred in zip(index,preds):
+            datawindow.push(id,pred)
+            if datawindow.isfull(id):
+                ps = datawindow.getobjs(id)
+                ps = np.vstack(list(ps))
+                scores = dnn.non_class_window_score(ps,datawindow.ws)
+                score[id] = scores.mean()
             
         
     
