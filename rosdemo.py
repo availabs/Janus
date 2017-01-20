@@ -35,7 +35,6 @@ def mainloop(pipe=None):
     while True:
         m = main.exitcode
         
-        
         if m is not None:
             break;
         
@@ -76,13 +75,11 @@ def ROS_Facing(lock):
     generator = datagenerator()
     clf,revmap = load_classifier(lock)
     cacher = feature_cacher()
-    kill = False
-    cacheFlag = False
-    label = None
+    opts = {'kill':False, 'cacheFlag':False, 'label':None}
 
     def destroy():
         extractor.kill()
-    def callback(data):
+    def callback(data,options={}):
         bbs, img = data
         temp = processor.get_cb_faces(img,bbs)
         if temp == None:
@@ -91,8 +88,13 @@ def ROS_Facing(lock):
         feats = extractor.getFeatures(wfaces)
         faceDict.update(fbbs,feats)
         index,fbbs,feats = faceDict.getobjs()
+        if 'label' in options and options['label'] is not None :
+            opts['label'] = options['label']
+        if 'store' in options :
+            opts['cacheFlag']= options['store']
+            
         clss,score,tmap = handledata(dnn,cacher,generator,
-                                     cacheFlag,label,feats,
+                                     opts['cacheFlag'],opts['label'],feats,
                                      wfaces,datawindow,index)
         
         clasmap = '';

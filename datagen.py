@@ -59,7 +59,7 @@ class datagenerator:
     def loadfeatures(self):
         if self.features is None or self.labels is None:
             fnames = self.queryfiles()
-            clsmap = json.loads(open('classmap.json').read())
+            clsmap = json.loads(open('/home/avail/code/ROS/dl_ros_nodes/src/facerec/scripts/facerecognition/classmap.json').read())
             numkeys = len(list(clsmap.keys()))
             path2classix = mapper_lbl_vec(clsmap,numkeys)
         if self.features is None:
@@ -85,7 +85,7 @@ class datagenerator:
             #get filenames of the current files
             fnames = self.queryfiles()
             #get the classmap for those objects
-            clsmap = json.loads(open('classmap.json').read())
+            clsmap = json.loads(open('/home/avail/code/ROS/dl_ros_nodes/src/facerec/scripts/facerecognition/classmap.json').read())
             self.classmap = clsmap
             #get numerical ids for them
             numkeys = len(list(clsmap.keys()))
