@@ -1,6 +1,7 @@
 import tensorflow as tf
 from datagen import datagenerator
 import numpy as np
+import os
 class model:
     def __init__(self,inputshape=128,outputshape=5):
         
@@ -34,17 +35,23 @@ class model:
         self.currdata=None
         self.currlbls=None
 
-    def save(self):
+    def save(self,filename='tflowmodel.ckpt'):
+
         saver = tf.train.Saver()
         save_path = saver.save(self.session,
-            '/home/avail/code/facerecognition/checkpoints/tflowmodel.ckpt')
+         os.path.join('/home/avail/code/facerecognition/checkpoints/',filename))
         print("Model saved in file %s" % save_path)
     def load_previous(self,
-        path='/home/avail/code/facerecognition/checkpoints/tflowmodel.ckpt'):
+        filename='tflowmodel.ckpt'):
+
         loader = tf.train.Saver()
-        loader.restore(self.session,path)
-        print('Model Restored')
-        
+        prefix = '/home/avail/code/facerecognition/checkpoints/'
+        path = os.path.join(prefix,filename)
+        if os.path.exists(path):
+            loader.restore(self.session,path)
+            print( 'Model Restored' )
+        else:
+            print( 'CKPT file does not exist' )
     def input_traindata(self,data,lbls):
         self.curr_trdata = data
         self.curr_trlbls = lbls

@@ -96,6 +96,14 @@ def ROS_Facing(lock):
         clss,score,tmap = handledata(dnn,cacher,generator,
                                      opts['cacheFlag'],opts['label'],feats,
                                      wfaces,datawindow,index)
+
+        if 'save' in options and options['save'] is not None:
+            options['save'] = None
+            dnn.save( filename = options['save'] )
+
+        if 'load' in options and options['load'] is not None:
+            options['load'] = None
+            dnn.load_previous(filename=options['load'])
         
         clasmap = '';
         if tmap is not None:
