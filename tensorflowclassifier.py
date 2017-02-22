@@ -14,7 +14,7 @@ class model:
         Y = tf.matmul(X,W)+b
         prediction = tf.nn.softmax(Y)
         cross_entropy = tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits(Y,Y_))
+            tf.nn.softmax_cross_entropy_with_logits(logits=Y,labels=Y_))
         train_step =tf.train.GradientDescentOptimizer(0.5).minimize(
             cross_entropy)
         correct_prediction = tf.equal(tf.argmax(Y,1),tf.argmax(Y_,1))
